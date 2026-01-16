@@ -1,0 +1,435 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTH
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String?
+  avatar        String?
+  bio           String?
+  psnId         String?
+  xboxGamertag  String?
+  discordId     String?
+  role          UserRole  @default(USER)
+  tier          UserTier  @default(FREE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  stats                 UserStats?
+  createdTournaments    Tournament[]        @relation("TournamentCreator")
+  participations        TournamentParticipant[]
+  captainedTeams        Team[]              @relation("TeamCaptain")
+  teamMemberships       TeamMember[]
+  posts                 Post[]
+  comments              Comment[]
+  sentMessages          Message[]
+  notifications         Notification[]
+  transactions          Transaction[]
+  following             Follow[]            @relation("Following")
+  followers             Follow[]            @relation("Followers")
+  chatRoomMemberships   ChatRoomMember[]
+  matchesAsParticipant1 Match[]             @relation("MatchParticipant1")
+  matchesAsParticipant2 Match[]             @relation("MatchParticipant2")
+  wonMatches            Match[]             @relation("MatchWinner")
+}
+
+enum UserRole {
+  USER
+  ORGANIZER
+  ADMIN
+}
+
+enum UserTier {
+  FREE
+  PRO
+  ORGANIZER
+}
+
+model UserStats {
+  id                String @id @default(cuid())
+  userId            String @unique
+  wins              Int    @default(0)
+  losses            Int    @default(0)
+  tournamentsPlayed Int    @default(0)
+  tournamentsWon    Int    @default(0)
+  totalEarnings     Float  @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+// ============================================
+// GAMES
+// ============================================
+
+model Game {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  platform    Platform[]
+  coverImage  String?
+  category    GameCategory
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  // Relations
+  tournaments Tournament[]
+  teams       Team[]
+}
+
+enum Platform {
+  PS5
+  XBOX
+  PC
+  CROSS_PLATFORM
+}
+
+enum GameCategory {
+  SPORTS
+  FIGHTING
+  SHOOTER
+  BATTLE_ROYALE
+  RACING
+  RPG
+  STRATEGY
+  OTHER
+}
+
+// ============================================
+// TOURNAMENTS
+// ============================================
+
+model Tournament {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  description     String?
+  gameId          String
+  format          TournamentFormat
+  bracketType     BracketType
+  teamSize        Int              @default(1) // 1 = solo, 2+ = teams
+  maxParticipants Int
+  entryFee        Float            @default(0)
+  prizePool       Float            @default(0)
+  platformFee     Float            @default(0)
+  rules           String?
+  startDate       DateTime
+  checkInStart    DateTime?
+  registrationEnd DateTime?
+  status          TournamentStatus @default(DRAFT)
+  createdById     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  game         Game                    @relation(fields: [gameId], references: [id])
+  createdBy    User                    @relation("TournamentCreator", fields: [createdById], references: [id])
+  participants TournamentParticipant[]
+  matches      Match[]
+  bracket      Bracket?
+  posts        Post[]
+  chatRoom     ChatRoom?
+  transactions Transaction[]
+}
+
+enum TournamentFormat {
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+  ROUND_ROBIN
+  SWISS
+}
+
+enum BracketType {
+  SOLO
+  TEAM
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  CHECK_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model TournamentParticipant {
+  id           String            @id @default(cuid())
+  tournamentId String
+  userId       String?
+  teamId       String?
+  seed         Int?
+  status       ParticipantStatus @default(REGISTERED)
+  checkedIn    Boolean           @default(false)
+  placement    Int?
+  createdAt    DateTime          @default(now())
+
+  // Relations
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id])
+  team       Team?      @relation(fields: [teamId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@unique([tournamentId, teamId])
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  CHECKED_IN
+  ACTIVE
+  ELIMINATED
+  WINNER
+  DISQUALIFIED
+}
+
+// ============================================
+// BRACKETS & MATCHES
+// ============================================
+
+model Bracket {
+  id           String     @id @default(cuid())
+  tournamentId String     @unique
+  bracketData  Json       // Stores bracket structure
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+}
+
+model Match {
+  id             String      @id @default(cuid())
+  tournamentId   String
+  round          Int
+  matchNumber    Int
+  participant1Id String?
+  participant2Id String?
+  score1         Int?
+  score2         Int?
+  winnerId       String?
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  status         MatchStatus @default(PENDING)
+  bracketPosition Json?      // For bracket visualization
+
+  // Relations
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  participant1 User?      @relation("MatchParticipant1", fields: [participant1Id], references: [id])
+  participant2 User?      @relation("MatchParticipant2", fields: [participant2Id], references: [id])
+  winner       User?      @relation("MatchWinner", fields: [winnerId], references: [id])
+
+  @@unique([tournamentId, round, matchNumber])
+}
+
+enum MatchStatus {
+  PENDING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+// ============================================
+// TEAMS
+// ============================================
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  tag         String   @unique // Short team tag like "TSM"
+  logo        String?
+  captainId   String
+  gameId      String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  captain        User                    @relation("TeamCaptain", fields: [captainId], references: [id])
+  game           Game                    @relation(fields: [gameId], references: [id])
+  members        TeamMember[]
+  participations TournamentParticipant[]
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+enum TeamMemberRole {
+  CAPTAIN
+  CO_CAPTAIN
+  MEMBER
+  SUBSTITUTE
+}
+
+// ============================================
+// COMMUNITY
+// ============================================
+
+model Post {
+  id           String   @id @default(cuid())
+  userId       String
+  content      String
+  mediaUrls    String[]
+  tournamentId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
+  comments   Comment[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// CHAT & NOTIFICATIONS
+// ============================================
+
+model ChatRoom {
+  id           String       @id @default(cuid())
+  type         ChatRoomType
+  name         String?
+  tournamentId String?      @unique
+  createdAt    DateTime     @default(now())
+
+  // Relations
+  tournament Tournament?      @relation(fields: [tournamentId], references: [id])
+  members    ChatRoomMember[]
+  messages   Message[]
+}
+
+enum ChatRoomType {
+  TOURNAMENT
+  TEAM
+  DIRECT
+  GROUP
+}
+
+model ChatRoomMember {
+  id         String   @id @default(cuid())
+  chatRoomId String
+  userId     String
+  joinedAt   DateTime @default(now())
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatRoomId, userId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  chatRoomId String
+  senderId   String
+  content    String
+  createdAt  DateTime @default(now())
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  TOURNAMENT_REMINDER
+  MATCH_READY
+  MATCH_RESULT
+  TEAM_INVITE
+  FOLLOW
+  PRIZE_PAYOUT
+  SYSTEM
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+model Transaction {
+  id              String            @id @default(cuid())
+  userId          String
+  tournamentId    String?
+  type            TransactionType
+  amount          Float
+  platformFee     Float             @default(0)
+  status          TransactionStatus @default(PENDING)
+  stripePaymentId String?
+  stripePayoutId  String?
+  description     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id])
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
+}
+
+enum TransactionType {
+  ENTRY_FEE
+  PRIZE_PAYOUT
+  SUBSCRIPTION
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
