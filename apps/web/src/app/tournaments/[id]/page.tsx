@@ -291,12 +291,22 @@ export default function TournamentDetailPage() {
               </span>
             </div>
 
-            {tournament.prizePool > 0 && (
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-dark-700">
-                <span className="text-dark-400">Prize Pool</span>
-                <span className="text-2xl font-bold text-green-400">
-                  ${tournament.prizePool.toFixed(2)}
-                </span>
+            {tournament.entryFee > 0 && (
+              <div className="mb-4 pb-4 border-b border-dark-700">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-dark-400">Current Prize Pool</span>
+                  <span className="text-2xl font-bold text-green-400">
+                    ${tournament.prizePool.toFixed(2)}
+                  </span>
+                </div>
+                {tournament.participants.length < tournament.maxParticipants && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-dark-500">Potential (if full)</span>
+                    <span className="text-dark-400">
+                      ${(tournament.entryFee * tournament.maxParticipants * 0.9).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -474,38 +484,52 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
-          {tournament.prizePool > 0 && (
+          {tournament.entryFee > 0 && (
             <div className="card mt-6">
               <h2 className="text-xl font-semibold text-white mb-4">Prize Distribution</h2>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🥇</span>
-                    <span className="text-white">1st Place</span>
+              {tournament.prizePool > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🥇</span>
+                      <span className="text-white">1st Place</span>
+                    </div>
+                    <span className="text-green-400 font-medium">
+                      ${(tournament.prizePool * 0.6).toFixed(2)}
+                    </span>
                   </div>
-                  <span className="text-green-400 font-medium">
-                    ${(tournament.prizePool * 0.6).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🥈</span>
-                    <span className="text-white">2nd Place</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🥈</span>
+                      <span className="text-white">2nd Place</span>
+                    </div>
+                    <span className="text-green-400 font-medium">
+                      ${(tournament.prizePool * 0.3).toFixed(2)}
+                    </span>
                   </div>
-                  <span className="text-green-400 font-medium">
-                    ${(tournament.prizePool * 0.3).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🥉</span>
-                    <span className="text-white">3rd Place</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🥉</span>
+                      <span className="text-white">3rd Place</span>
+                    </div>
+                    <span className="text-green-400 font-medium">
+                      ${(tournament.prizePool * 0.1).toFixed(2)}
+                    </span>
                   </div>
-                  <span className="text-green-400 font-medium">
-                    ${(tournament.prizePool * 0.1).toFixed(2)}
-                  </span>
                 </div>
-              </div>
+              ) : (
+                <div className="text-dark-400 text-sm">
+                  <p className="mb-2">Prize pool grows as participants register:</p>
+                  <ul className="space-y-1 text-dark-500">
+                    <li>🥇 1st Place: 60%</li>
+                    <li>🥈 2nd Place: 30%</li>
+                    <li>🥉 3rd Place: 10%</li>
+                  </ul>
+                  <p className="mt-3 text-dark-400">
+                    Potential total: ${(tournament.entryFee * tournament.maxParticipants * 0.9).toFixed(2)}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

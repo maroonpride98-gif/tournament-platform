@@ -35,7 +35,7 @@ export class TournamentsService {
         teamSize: dto.teamSize,
         maxParticipants: dto.maxParticipants,
         entryFee: dto.entryFee,
-        prizePool: dto.entryFee > 0 ? dto.entryFee * dto.maxParticipants * 0.9 : 0,
+        prizePool: 0, // Prize pool grows as participants pay entry fees
         platformFee,
         rules: dto.rules,
         startDate: new Date(dto.startDate),
