@@ -95,6 +95,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Emit tournament events
   emitTournamentUpdate(tournamentId: string, event: string, data: any) {
+    if (!this.server) {
+      this.logger.warn('WebSocket server not initialized, skipping emit');
+      return;
+    }
     const room = `tournament:${tournamentId}`;
     this.server.to(room).emit(event, data);
     this.logger.debug(`Emitted ${event} to ${room}`);
@@ -122,12 +126,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Emit chat messages
   emitChatMessage(chatRoomId: string, message: any) {
+    if (!this.server) return;
     const room = `chat:${chatRoomId}`;
     this.server.to(room).emit('chat:message', message);
   }
 
   // Emit notifications to specific user
   emitNotification(userId: string, notification: any) {
+    if (!this.server) return;
     const room = `user:${userId}`;
     this.server.to(room).emit('notification', notification);
   }
