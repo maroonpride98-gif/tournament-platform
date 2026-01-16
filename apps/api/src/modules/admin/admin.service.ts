@@ -161,8 +161,8 @@ export class AdminService {
           createdAt: true,
           _count: {
             select: {
-              tournaments: true,
-              teams: true,
+              participations: true,
+              teamMemberships: true,
             },
           },
         },

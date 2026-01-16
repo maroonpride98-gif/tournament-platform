@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 
@@ -19,6 +19,7 @@ export class ChatService {
         data: {
           name: 'Tournament Chat',
           tournamentId,
+          type: 'TOURNAMENT',
         },
       });
     }
@@ -39,7 +40,7 @@ export class ChatService {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: {
+        sender: {
           select: {
             id: true,
             username: true,
@@ -65,10 +66,10 @@ export class ChatService {
       data: {
         content,
         chatRoomId,
-        userId,
+        senderId: userId,
       },
       include: {
-        user: {
+        sender: {
           select: {
             id: true,
             username: true,
@@ -84,20 +85,48 @@ export class ChatService {
     return message;
   }
 
-  async getTeamChatRoom(teamId: string) {
-    let chatRoom = await this.prisma.chatRoom.findFirst({
-      where: { teamId },
+  async createGroupChatRoom(name: string, memberIds: string[]) {
+    const chatRoom = await this.prisma.chatRoom.create({
+      data: {
+        name,
+        type: 'GROUP',
+        members: {
+          create: memberIds.map((userId) => ({ userId })),
+        },
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!chatRoom) {
-      chatRoom = await this.prisma.chatRoom.create({
-        data: {
-          name: 'Team Chat',
-          teamId,
-        },
-      });
-    }
-
     return chatRoom;
+  }
+
+  async getUserChatRooms(userId: string) {
+    const memberships = await this.prisma.chatRoomMember.findMany({
+      where: { userId },
+      include: {
+        chatRoom: {
+          include: {
+            messages: {
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map((m) => m.chatRoom);
   }
 }

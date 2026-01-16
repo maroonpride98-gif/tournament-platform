@@ -21,9 +21,9 @@ export class ChatController {
     return this.chatService.getOrCreateTournamentChatRoom(tournamentId);
   }
 
-  @Get('team/:teamId')
-  async getTeamChatRoom(@Param('teamId') teamId: string) {
-    return this.chatService.getTeamChatRoom(teamId);
+  @Get('my-rooms')
+  async getUserChatRooms(@Request() req: any) {
+    return this.chatService.getUserChatRooms(req.user.id);
   }
 
   @Get(':chatRoomId/messages')

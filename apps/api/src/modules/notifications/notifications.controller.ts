@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Notification } from 'database';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -20,7 +21,7 @@ export class NotificationsController {
   async getNotifications(
     @Request() req: any,
     @Query('limit') limit?: number,
-  ) {
+  ): Promise<Notification[]> {
     return this.notificationsService.getNotifications(req.user.id, { limit });
   }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
+import { Notification, NotificationType } from 'database';
 
 @Injectable()
 export class NotificationsService {
@@ -9,7 +10,7 @@ export class NotificationsService {
     private eventsGateway: EventsGateway,
   ) {}
 
-  async getNotifications(userId: string, options?: { limit?: number }) {
+  async getNotifications(userId: string, options?: { limit?: number }): Promise<Notification[]> {
     const { limit = 20 } = options || {};
 
     return this.prisma.notification.findMany({
@@ -21,18 +22,18 @@ export class NotificationsService {
 
   async createNotification(data: {
     userId: string;
-    type: string;
+    type: NotificationType;
     title: string;
     message: string;
     link?: string;
-  }) {
+  }): Promise<Notification> {
     const notification = await this.prisma.notification.create({
       data: {
         userId: data.userId,
         type: data.type,
         title: data.title,
         message: data.message,
-        link: data.link,
+        data: data.link ? { link: data.link } : undefined,
         read: false,
       },
     });
@@ -43,70 +44,70 @@ export class NotificationsService {
     return notification;
   }
 
-  async markAsRead(notificationId: string, userId: string) {
-    return this.prisma.notification.updateMany({
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
+    await this.prisma.notification.updateMany({
       where: { id: notificationId, userId },
       data: { read: true },
     });
   }
 
-  async markAllAsRead(userId: string) {
-    return this.prisma.notification.updateMany({
+  async markAllAsRead(userId: string): Promise<void> {
+    await this.prisma.notification.updateMany({
       where: { userId, read: false },
       data: { read: true },
     });
   }
 
-  async deleteNotification(notificationId: string, userId: string) {
-    return this.prisma.notification.deleteMany({
+  async deleteNotification(notificationId: string, userId: string): Promise<void> {
+    await this.prisma.notification.deleteMany({
       where: { id: notificationId, userId },
     });
   }
 
   // Helper methods for common notifications
-  async notifyTournamentRegistration(userId: string, tournamentName: string, tournamentSlug: string) {
+  async notifyTournamentRegistration(userId: string, tournamentName: string, tournamentSlug: string): Promise<Notification> {
     return this.createNotification({
       userId,
-      type: 'TOURNAMENT',
+      type: NotificationType.TOURNAMENT_REMINDER,
       title: 'Registration Confirmed',
       message: `You have successfully registered for ${tournamentName}`,
       link: `/tournaments/${tournamentSlug}`,
     });
   }
 
-  async notifyTournamentStart(userId: string, tournamentName: string, tournamentSlug: string) {
+  async notifyTournamentStart(userId: string, tournamentName: string, tournamentSlug: string): Promise<Notification> {
     return this.createNotification({
       userId,
-      type: 'TOURNAMENT',
+      type: NotificationType.TOURNAMENT_REMINDER,
       title: 'Tournament Starting',
       message: `${tournamentName} is starting now!`,
       link: `/tournaments/${tournamentSlug}`,
     });
   }
 
-  async notifyMatchReady(userId: string, tournamentName: string, tournamentSlug: string) {
+  async notifyMatchReady(userId: string, tournamentName: string, tournamentSlug: string): Promise<Notification> {
     return this.createNotification({
       userId,
-      type: 'TOURNAMENT',
+      type: NotificationType.MATCH_READY,
       title: 'Match Ready',
       message: `Your match in ${tournamentName} is ready to start`,
       link: `/tournaments/${tournamentSlug}`,
     });
   }
 
-  async notifyPrizeWon(userId: string, amount: number, tournamentName: string) {
+  async notifyPrizeWon(userId: string, amount: number, tournamentName: string): Promise<Notification> {
     return this.createNotification({
       userId,
-      type: 'PAYMENT',
+      type: NotificationType.PRIZE_PAYOUT,
       title: 'Prize Won!',
       message: `Congratulations! You won $${amount.toFixed(2)} in ${tournamentName}`,
     });
   }
 
-  async notifyTeamInvite(userId: string, teamName: string, teamTag: string) {
+  async notifyTeamInvite(userId: string, teamName: string, teamTag: string): Promise<Notification> {
     return this.createNotification({
       userId,
-      type: 'TEAM',
+      type: NotificationType.TEAM_INVITE,
       title: 'Team Invitation',
       message: `You have been invited to join ${teamName}`,
       link: `/teams/${teamTag}`,
