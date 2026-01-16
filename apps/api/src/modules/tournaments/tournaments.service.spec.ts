@@ -4,6 +4,7 @@ import { BracketService } from './bracket.service';
 import { EventsGateway } from '../events/events.gateway';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { TournamentFormat, BracketType } from './dto/create-tournament.dto';
 
 describe('TournamentsService', () => {
   let service: TournamentsService;
@@ -69,8 +70,8 @@ describe('TournamentsService', () => {
     const createDto = {
       name: 'Test Tournament',
       gameId: 'game-1',
-      format: 'SINGLE_ELIMINATION' as const,
-      bracketType: 'SOLO' as const,
+      format: TournamentFormat.SINGLE_ELIMINATION,
+      bracketType: BracketType.SOLO,
       teamSize: 1,
       maxParticipants: 16,
       entryFee: 10,

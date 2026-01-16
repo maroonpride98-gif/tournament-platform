@@ -3,12 +3,13 @@ module.exports = {
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
+    '^.+\\.ts$': 'ts-jest',
   },
-  collectCoverageFrom: ['**/*.(t|j)s'],
+  collectCoverageFrom: ['**/*.ts', '!**/*.spec.ts'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
-    '^shared$': '<rootDir>/../../packages/shared/src',
+    '^shared$': '<rootDir>/../../../packages/shared/src',
+    '^database$': '<rootDir>/../../../packages/database/src',
   },
 };
