@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
-import { Menu, X, Trophy, Users, Gamepad2, User, LogOut, Plus } from 'lucide-react';
+import { Menu, X, Trophy, Users, Gamepad2, User, LogOut, Plus, Shield } from 'lucide-react';
+import { NotificationDropdown } from '../notifications/NotificationDropdown';
 
 export function Navbar() {
   const { data: session, status } = useSession();
@@ -52,6 +53,7 @@ export function Navbar() {
                   <Plus className="w-4 h-4 mr-2" />
                   Create Tournament
                 </Link>
+                <NotificationDropdown />
                 <div className="relative group">
                   <button className="flex items-center gap-2 p-2 hover:bg-dark-800 rounded-lg transition-colors">
                     <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +17,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { TOURNAMENT_FORMATS, PLATFORMS, GAME_CATEGORIES } from '@/lib/constants';
+import { gamesApi, tournamentsApi } from '@/lib/api';
 
 const tournamentSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(100),
@@ -34,17 +35,12 @@ const tournamentSchema = z.object({
 
 type TournamentForm = z.infer<typeof tournamentSchema>;
 
-// Mock games - will be fetched from API
-const games = [
-  { id: '1', name: 'EA Sports FC 25', platform: 'PS5', category: 'SPORTS' },
-  { id: '2', name: 'Call of Duty: Warzone', platform: 'CROSS_PLATFORM', category: 'SHOOTER' },
-  { id: '3', name: 'Tekken 8', platform: 'PS5', category: 'FIGHTING' },
-  { id: '4', name: 'NBA 2K25', platform: 'CROSS_PLATFORM', category: 'SPORTS' },
-  { id: '5', name: 'Street Fighter 6', platform: 'PS5', category: 'FIGHTING' },
-  { id: '6', name: 'Fortnite', platform: 'CROSS_PLATFORM', category: 'BATTLE_ROYALE' },
-  { id: '7', name: 'Madden NFL 25', platform: 'CROSS_PLATFORM', category: 'SPORTS' },
-  { id: '8', name: 'Mortal Kombat 1', platform: 'PS5', category: 'FIGHTING' },
-];
+interface Game {
+  id: string;
+  name: string;
+  platform: string;
+  category: string;
+}
 
 const steps = [
   { id: 'basics', title: 'Basics', icon: Trophy },
@@ -57,6 +53,22 @@ export default function CreateTournamentPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [games, setGames] = useState<Game[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchGames() {
+      try {
+        const response = await gamesApi.getAll();
+        setGames(response.data || []);
+      } catch (err) {
+        console.error('Failed to fetch games:', err);
+      } finally {
+        setGamesLoading(false);
+      }
+    }
+    fetchGames();
+  }, []);
 
   const {
     register,
@@ -80,20 +92,12 @@ export default function CreateTournamentPage() {
   const onSubmit = async (data: TournamentForm) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/tournaments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create tournament');
-      }
-
-      const result = await response.json();
-      router.push(`/tournaments/${result.id}`);
-    } catch (error) {
+      const response = await tournamentsApi.create(data);
+      const result = response.data;
+      router.push(`/tournaments/${result.slug || result.id}`);
+    } catch (error: any) {
       console.error('Error creating tournament:', error);
+      alert(error.response?.data?.message || 'Failed to create tournament');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,8 +169,8 @@ export default function CreateTournamentPage() {
                 <label htmlFor="gameId" className="label">
                   Game *
                 </label>
-                <select {...register('gameId')} id="gameId" className="input">
-                  <option value="">Select a game</option>
+                <select {...register('gameId')} id="gameId" className="input" disabled={gamesLoading}>
+                  <option value="">{gamesLoading ? 'Loading games...' : 'Select a game'}</option>
                   {games.map((game) => (
                     <option key={game.id} value={game.id}>
                       {game.name} ({game.platform})

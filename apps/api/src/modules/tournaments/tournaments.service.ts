@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BracketService } from './bracket.service';
+import { EventsGateway } from '../events/events.gateway';
 import { CreateTournamentDto } from './dto/create-tournament.dto';
 import { PLATFORM_FEES } from 'shared';
 
@@ -9,6 +10,7 @@ export class TournamentsService {
   constructor(
     private prisma: PrismaService,
     private bracketService: BracketService,
+    private eventsGateway: EventsGateway,
   ) {}
 
   async create(dto: CreateTournamentDto, userId: string) {
@@ -194,6 +196,17 @@ export class TournamentsService {
         teamId: tournament.bracketType === 'TEAM' ? teamId : null,
         status: 'REGISTERED',
       },
+      include: {
+        user: { select: { id: true, username: true, avatar: true } },
+        team: true,
+      },
+    });
+
+    // Emit real-time update
+    this.eventsGateway.emitParticipantUpdate(tournamentId, {
+      action: 'joined',
+      participant,
+      count: tournament._count.participants + 1,
     });
 
     return participant;
@@ -250,6 +263,10 @@ export class TournamentsService {
       }),
     ]);
 
+    // Emit real-time updates
+    this.eventsGateway.emitTournamentStatusChange(tournamentId, 'IN_PROGRESS');
+    this.eventsGateway.emitBracketUpdate(tournamentId, { bracketData, matches });
+
     return this.findOne(tournamentId);
   }
 
@@ -290,6 +307,23 @@ export class TournamentsService {
 
     // Advance winner to next round
     await this.bracketService.advanceWinner(matchId, winnerId!);
+
+    // Emit real-time match update
+    this.eventsGateway.emitMatchUpdate(tournamentId, matchId, {
+      score1,
+      score2,
+      winnerId,
+      status: 'COMPLETED',
+    });
+
+    // Check if tournament is complete
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (tournament?.status === 'COMPLETED') {
+      this.eventsGateway.emitTournamentStatusChange(tournamentId, 'COMPLETED');
+    }
 
     return updatedMatch;
   }

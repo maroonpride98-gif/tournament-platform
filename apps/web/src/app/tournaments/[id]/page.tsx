@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { tournamentsApi, paymentsApi } from '@/lib/api';
 import { TOURNAMENT_STATUS_LABELS, MATCH_STATUS_LABELS } from '@/lib/constants';
+import { BracketView } from '@/components/bracket/BracketView';
+import { useTournamentSocket } from '@/lib/socket';
 
 interface Tournament {
   id: string;
@@ -92,6 +94,9 @@ export default function TournamentDetailPage() {
   const [error, setError] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
 
+  // Real-time updates via Socket.io
+  const { isConnected, lastUpdate } = useTournamentSocket(tournament?.id);
+
   useEffect(() => {
     loadTournament();
 
@@ -103,6 +108,13 @@ export default function TournamentDetailPage() {
       setPaymentStatus('cancelled');
     }
   }, [params.id]);
+
+  // Reload tournament when socket update received
+  useEffect(() => {
+    if (lastUpdate) {
+      loadTournament();
+    }
+  }, [lastUpdate]);
 
   const loadTournament = async () => {
     try {
@@ -426,47 +438,25 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
-          {/* Bracket Preview */}
+          {/* Bracket */}
           {tournament.matches.length > 0 && (
             <div className="card mt-6">
               <h2 className="text-xl font-semibold text-white mb-4">Bracket</h2>
-              <div className="space-y-4">
-                {Array.from(new Set(tournament.matches.map(m => m.round))).map(round => (
-                  <div key={round}>
-                    <h3 className="text-sm font-medium text-dark-400 mb-2">Round {round}</h3>
-                    <div className="grid gap-2">
-                      {tournament.matches
-                        .filter(m => m.round === round)
-                        .map(match => (
-                          <div
-                            key={match.id}
-                            className="flex items-center justify-between p-3 bg-dark-800 rounded-lg"
-                          >
-                            <div className="flex-1">
-                              <p className={`text-sm ${match.winnerId === match.participant1Id ? 'text-green-400 font-medium' : 'text-white'}`}>
-                                {match.participant1Id || 'TBD'}
-                              </p>
-                              <p className={`text-sm ${match.winnerId === match.participant2Id ? 'text-green-400 font-medium' : 'text-white'}`}>
-                                {match.participant2Id || 'TBD'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              {match.status === 'COMPLETED' ? (
-                                <div className="text-white font-medium">
-                                  {match.score1} - {match.score2}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-dark-400">
-                                  {MATCH_STATUS_LABELS[match.status]}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <BracketView
+                matches={tournament.matches}
+                participants={tournament.participants}
+                bracketType={tournament.bracketType as 'SOLO' | 'TEAM'}
+                format={tournament.format}
+                isOrganizer={isOrganizer}
+                onScoreSubmit={async (matchId, score1, score2) => {
+                  try {
+                    await tournamentsApi.reportScore(tournament.id, matchId, score1, score2);
+                    await loadTournament();
+                  } catch (err) {
+                    console.error('Failed to submit score:', err);
+                  }
+                }}
+              />
             </div>
           )}
         </div>

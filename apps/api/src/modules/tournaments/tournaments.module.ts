@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { TournamentsController } from './tournaments.controller';
 import { TournamentsService } from './tournaments.service';
 import { BracketService } from './bracket.service';
+import { EventsModule } from '../events/events.module';
 
 @Module({
+  imports: [EventsModule],
   controllers: [TournamentsController],
   providers: [TournamentsService, BracketService],
   exports: [TournamentsService],
