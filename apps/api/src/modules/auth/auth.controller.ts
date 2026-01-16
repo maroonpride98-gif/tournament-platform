@@ -1,15 +1,27 @@
 import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { IsEmail, IsString, MinLength, MaxLength } from 'class-validator';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 class RegisterDto {
+  @IsEmail()
   email: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(20)
   username: string;
+
+  @IsString()
+  @MinLength(8)
   password: string;
 }
 
 class LoginDto {
+  @IsEmail()
   email: string;
+
+  @IsString()
   password: string;
 }
 

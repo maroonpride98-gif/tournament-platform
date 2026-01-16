@@ -65,7 +65,9 @@ export class TournamentsService {
     status?: string;
     search?: string;
   }) {
-    const { page = 1, pageSize = 10, gameId, status, search } = options;
+    const page = Number(options.page) || 1;
+    const pageSize = Number(options.pageSize) || 10;
+    const { gameId, status, search } = options;
     const skip = (page - 1) * pageSize;
 
     const where: any = {};

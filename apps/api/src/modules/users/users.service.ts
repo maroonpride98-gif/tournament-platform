@@ -76,7 +76,8 @@ export class UsersService {
     pageSize?: number;
     gameId?: string;
   }) {
-    const { page = 1, pageSize = 50, gameId } = options;
+    const page = Number(options.page) || 1;
+    const pageSize = Number(options.pageSize) || 50;
     const skip = (page - 1) * pageSize;
 
     const users = await this.prisma.userStats.findMany({
