@@ -64,7 +64,7 @@ export default function ProfilePage() {
     } else if (status === 'authenticated') {
       loadData();
     }
-  }, [status]);
+  }, [status, router]);
 
   const loadData = async () => {
     try {

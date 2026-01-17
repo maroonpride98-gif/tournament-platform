@@ -102,7 +102,7 @@ export class AdminService {
     };
   }
 
-  async cancelTournament(tournamentId: string, adminId: string) {
+  async cancelTournament(tournamentId: string, _adminId: string) {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },
     });

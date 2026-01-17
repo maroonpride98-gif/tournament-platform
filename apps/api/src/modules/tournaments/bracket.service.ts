@@ -33,9 +33,6 @@ export class BracketService {
     const bracketSize = this.getNextPowerOfTwo(seededParticipants.length);
     const totalRounds = Math.log2(bracketSize);
 
-    // Calculate number of byes needed
-    const byesNeeded = bracketSize - seededParticipants.length;
-
     const matches: MatchData[] = [];
     const bracketData: any = {
       type: 'SINGLE_ELIMINATION',

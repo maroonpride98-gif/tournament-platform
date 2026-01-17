@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { Send, User, MessageSquare, X, Minimize2, Maximize2 } from 'lucide-react';
 import { useChatSocket } from '@/lib/socket';
@@ -37,11 +37,23 @@ export function TournamentChat({ tournamentId, chatRoomId, tournamentName }: Tou
     isOpen ? chatRoomId : undefined
   );
 
+  const fetchMessages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(`/chat/${chatRoomId}/messages`);
+      setMessages(response.data);
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [chatRoomId]);
+
   useEffect(() => {
     if (isOpen && chatRoomId) {
       fetchMessages();
     }
-  }, [isOpen, chatRoomId]);
+  }, [isOpen, chatRoomId, fetchMessages]);
 
   useEffect(() => {
     if (realtimeMessages.length > 0) {
@@ -53,18 +65,6 @@ export function TournamentChat({ tournamentId, chatRoomId, tournamentName }: Tou
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const fetchMessages = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/chat/${chatRoomId}/messages`);
-      setMessages(response.data);
-    } catch (error) {
-      console.error('Failed to fetch messages:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

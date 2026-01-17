@@ -277,7 +277,7 @@ export class TournamentsService {
     matchId: string,
     score1: number,
     score2: number,
-    userId: string,
+    _userId: string,
   ): Promise<any> {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },

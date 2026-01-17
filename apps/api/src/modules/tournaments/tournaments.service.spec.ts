@@ -8,7 +8,7 @@ import { TournamentFormat, BracketType } from './dto/create-tournament.dto';
 
 describe('TournamentsService', () => {
   let service: TournamentsService;
-  let prismaService: PrismaService;
+  let _prismaService: PrismaService;
 
   const mockPrismaService = {
     tournament: {
@@ -57,7 +57,7 @@ describe('TournamentsService', () => {
     }).compile();
 
     service = module.get<TournamentsService>(TournamentsService);
-    prismaService = module.get<PrismaService>(PrismaService);
+    _prismaService = module.get<PrismaService>(PrismaService);
 
     jest.clearAllMocks();
   });

@@ -7,8 +7,8 @@ import * as bcrypt from 'bcryptjs';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prismaService: PrismaService;
-  let jwtService: JwtService;
+  let _prismaService: PrismaService;
+  let _jwtService: JwtService;
 
   const mockPrismaService = {
     user: {
@@ -31,8 +31,8 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    prismaService = module.get<PrismaService>(PrismaService);
-    jwtService = module.get<JwtService>(JwtService);
+    _prismaService = module.get<PrismaService>(PrismaService);
+    _jwtService = module.get<JwtService>(JwtService);
 
     jest.clearAllMocks();
   });

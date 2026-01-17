@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -97,6 +97,17 @@ export default function TournamentDetailPage() {
   // Real-time updates via Socket.io
   const { isConnected, lastUpdate } = useTournamentSocket(tournament?.id);
 
+  const loadTournament = useCallback(async () => {
+    try {
+      const response = await tournamentsApi.getOne(params.id as string);
+      setTournament(response.data);
+    } catch (err) {
+      setError('Failed to load tournament');
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id]);
+
   useEffect(() => {
     loadTournament();
 
@@ -107,25 +118,14 @@ export default function TournamentDetailPage() {
     } else if (payment === 'cancelled') {
       setPaymentStatus('cancelled');
     }
-  }, [params.id]);
+  }, [params.id, searchParams, loadTournament]);
 
   // Reload tournament when socket update received
   useEffect(() => {
     if (lastUpdate) {
       loadTournament();
     }
-  }, [lastUpdate]);
-
-  const loadTournament = async () => {
-    try {
-      const response = await tournamentsApi.getOne(params.id as string);
-      setTournament(response.data);
-    } catch (err) {
-      setError('Failed to load tournament');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [lastUpdate, loadTournament]);
 
   const isRegistered = tournament?.participants.some(
     (p) => p.user?.id === (session?.user as any)?.id

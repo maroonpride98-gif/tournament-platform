@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -61,19 +61,7 @@ export default function AdminTournamentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  useEffect(() => {
-    if (authStatus === 'loading') return;
-
-    const userRole = (session?.user as any)?.role;
-    if (!session || userRole !== 'ADMIN') {
-      router.push('/');
-      return;
-    }
-
-    fetchTournaments();
-  }, [session, authStatus, router, page, statusFilter]);
-
-  const fetchTournaments = async () => {
+  const fetchTournaments = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -91,7 +79,19 @@ export default function AdminTournamentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    if (authStatus === 'loading') return;
+
+    const userRole = (session?.user as any)?.role;
+    if (!session || userRole !== 'ADMIN') {
+      router.push('/');
+      return;
+    }
+
+    fetchTournaments();
+  }, [session, authStatus, router, page, statusFilter, fetchTournaments]);
 
   const handleStartTournament = async (tournamentId: string) => {
     if (!confirm('Are you sure you want to start this tournament? This will generate the bracket.')) {
