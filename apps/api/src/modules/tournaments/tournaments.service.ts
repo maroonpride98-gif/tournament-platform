@@ -240,10 +240,20 @@ export class TournamentsService {
       throw new BadRequestException('Need at least 2 participants to start');
     }
 
-    // Generate bracket
-    const { matches, bracketData } = this.bracketService.generateSingleElimination(
-      tournament.participants,
-    );
+    // Generate bracket based on tournament format
+    let matches: any[];
+    let bracketData: any;
+
+    if (tournament.format === 'DOUBLE_ELIMINATION') {
+      const result = this.bracketService.generateDoubleElimination(tournament.participants);
+      matches = result.matches;
+      bracketData = result.bracketData;
+    } else {
+      // Default to single elimination for SINGLE_ELIMINATION, ROUND_ROBIN, SWISS
+      const result = this.bracketService.generateSingleElimination(tournament.participants);
+      matches = result.matches;
+      bracketData = result.bracketData;
+    }
 
     // Create matches and bracket in database
     await this.prisma.$transaction([

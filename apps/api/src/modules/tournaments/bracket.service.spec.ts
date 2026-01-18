@@ -106,6 +106,42 @@ describe('BracketService', () => {
     });
   });
 
+  describe('generateDoubleElimination', () => {
+    it('should generate double elimination bracket for 4 participants', () => {
+      const participants = [
+        { id: '1', user: { id: 'u1', username: 'Player1' } },
+        { id: '2', user: { id: 'u2', username: 'Player2' } },
+        { id: '3', user: { id: 'u3', username: 'Player3' } },
+        { id: '4', user: { id: 'u4', username: 'Player4' } },
+      ];
+
+      const result = service.generateDoubleElimination(participants);
+
+      // Should have winners bracket, losers bracket, and grand finals
+      expect(result.bracketData.type).toBe('DOUBLE_ELIMINATION');
+      expect(result.bracketData.winnersRounds).toBe(2);
+      expect(result.bracketData.winners).toHaveLength(2);
+      expect(result.bracketData.losers).toBeDefined();
+      expect(result.bracketData.grandFinals).toHaveLength(1);
+
+      // Winners bracket matches + losers bracket matches + grand finals
+      expect(result.matches.length).toBeGreaterThan(3);
+    });
+
+    it('should generate double elimination bracket for 8 participants', () => {
+      const participants = Array.from({ length: 8 }, (_, i) => ({
+        id: `${i + 1}`,
+        user: { id: `u${i + 1}`, username: `Player${i + 1}` },
+      }));
+
+      const result = service.generateDoubleElimination(participants);
+
+      expect(result.bracketData.type).toBe('DOUBLE_ELIMINATION');
+      expect(result.bracketData.winnersRounds).toBe(3);
+      expect(result.bracketData.winners).toHaveLength(3);
+    });
+  });
+
   describe('advanceWinner', () => {
     it('should advance winner to next match', async () => {
       mockPrismaService.match.findUnique.mockResolvedValue({
