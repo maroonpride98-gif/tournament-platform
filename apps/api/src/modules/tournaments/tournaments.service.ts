@@ -214,6 +214,54 @@ export class TournamentsService {
     return participant;
   }
 
+  async checkIn(tournamentId: string, userId: string): Promise<any> {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Tournament not found');
+    }
+
+    if (tournament.status !== 'REGISTRATION_OPEN') {
+      throw new BadRequestException('Tournament is not open for check-in');
+    }
+
+    // Find participant
+    const participant = await this.prisma.tournamentParticipant.findFirst({
+      where: {
+        tournamentId,
+        userId,
+      },
+    });
+
+    if (!participant) {
+      throw new BadRequestException('You are not registered for this tournament');
+    }
+
+    if (participant.status === 'CHECKED_IN') {
+      throw new BadRequestException('You have already checked in');
+    }
+
+    // Update participant status to checked in
+    const updated = await this.prisma.tournamentParticipant.update({
+      where: { id: participant.id },
+      data: { status: 'CHECKED_IN' },
+      include: {
+        user: { select: { id: true, username: true, avatar: true } },
+        team: true,
+      },
+    });
+
+    // Emit real-time update
+    this.eventsGateway.emitParticipantUpdate(tournamentId, {
+      action: 'checked_in',
+      participant: updated,
+    });
+
+    return updated;
+  }
+
   async startTournament(tournamentId: string, userId: string): Promise<any> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },

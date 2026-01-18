@@ -54,6 +54,12 @@ export class TournamentsController {
     return this.tournamentsService.register(id, req.user.id, teamId);
   }
 
+  @Post(':id/check-in')
+  @UseGuards(JwtAuthGuard)
+  async checkIn(@Param('id') id: string, @Request() req: any): Promise<any> {
+    return this.tournamentsService.checkIn(id, req.user.id);
+  }
+
   @Post(':id/start')
   @UseGuards(JwtAuthGuard)
   async start(@Param('id') id: string, @Request() req: any): Promise<any> {
