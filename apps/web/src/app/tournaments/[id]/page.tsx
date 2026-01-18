@@ -34,6 +34,7 @@ interface Tournament {
   maxParticipants: number;
   entryFee: number;
   prizePool: number;
+  prizeDistributed: boolean;
   rules?: string;
   startDate: string;
   registrationEnd?: string;
@@ -499,9 +500,28 @@ export default function TournamentDetailPage() {
 
           {tournament.entryFee > 0 && (
             <div className="card mt-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Prize Distribution</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Prize Distribution</h2>
+                {tournament.status === 'COMPLETED' && (
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    tournament.prizeDistributed
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {tournament.prizeDistributed ? '✓ Distributed' : '⏳ Pending'}
+                  </span>
+                )}
+              </div>
               {tournament.prizePool > 0 ? (
                 <div className="space-y-3">
+                  {tournament.status === 'COMPLETED' && tournament.prizeDistributed && (
+                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <p className="text-green-400 text-sm flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" />
+                        Prizes have been distributed to winners!
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">🥇</span>

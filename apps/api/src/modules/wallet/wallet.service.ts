@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getBalance(userId: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
@@ -145,6 +149,12 @@ export class WalletService {
       return null; // No prize to award
     }
 
+    // Get tournament name for notification
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+
     const result = await this.prisma.$transaction(async (tx) => {
       // Add prize credits
       const user = await tx.user.update({
@@ -182,6 +192,17 @@ export class WalletService {
 
       return { user, transaction };
     });
+
+    // Send prize notification
+    if (tournament) {
+      await this.notificationsService.notifyPrizeWon(
+        userId,
+        amount / 100, // Convert to dollars
+        tournament.name,
+        placement,
+        tournament.slug,
+      );
+    }
 
     return result;
   }

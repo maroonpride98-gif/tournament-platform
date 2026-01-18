@@ -95,13 +95,36 @@ export class NotificationsService {
     });
   }
 
-  async notifyPrizeWon(userId: string, amount: number, tournamentName: string): Promise<Notification> {
+  async notifyPrizeWon(
+    userId: string,
+    amount: number,
+    tournamentName: string,
+    placement?: number,
+    tournamentSlug?: string,
+  ): Promise<Notification> {
+    const placementText = placement ? this.getPlacementLabel(placement) : '';
+    const title = placement === 1 ? '🏆 Tournament Winner!' : '🎉 Prize Won!';
+
     return this.createNotification({
       userId,
       type: NotificationType.PRIZE_PAYOUT,
-      title: 'Prize Won!',
-      message: `Congratulations! You won $${amount.toFixed(2)} in ${tournamentName}`,
+      title,
+      message: `Congratulations! You placed ${placementText} and won $${amount.toFixed(2)} in ${tournamentName}`,
+      link: tournamentSlug ? `/tournaments/${tournamentSlug}` : '/wallet',
     });
+  }
+
+  private getPlacementLabel(placement: number): string {
+    switch (placement) {
+      case 1:
+        return '1st';
+      case 2:
+        return '2nd';
+      case 3:
+        return '3rd';
+      default:
+        return `${placement}th`;
+    }
   }
 
   async notifyTeamInvite(userId: string, teamName: string, teamTag: string): Promise<Notification> {

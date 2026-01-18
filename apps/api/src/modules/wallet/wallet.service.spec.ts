@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WalletService } from './wallet.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('WalletService', () => {
@@ -16,10 +17,17 @@ describe('WalletService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    tournament: {
+      findUnique: jest.fn(),
+    },
     userStats: {
       upsert: jest.fn(),
     },
     $transaction: jest.fn((callback) => callback(mockPrismaService)),
+  };
+
+  const mockNotificationsService = {
+    notifyPrizeWon: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -27,6 +35,7 @@ describe('WalletService', () => {
       providers: [
         WalletService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -145,7 +154,11 @@ describe('WalletService', () => {
   });
 
   describe('awardPrize', () => {
-    it('should award prize and update stats', async () => {
+    it('should award prize, update stats, and send notification', async () => {
+      mockPrismaService.tournament.findUnique.mockResolvedValue({
+        name: 'Test Tournament',
+        slug: 'test-tournament',
+      });
       mockPrismaService.user.update.mockResolvedValue({
         id: 'user-1',
         credits: 10000,
@@ -161,6 +174,13 @@ describe('WalletService', () => {
 
       expect(result?.user.credits).toBe(10000);
       expect(mockPrismaService.userStats.upsert).toHaveBeenCalled();
+      expect(mockNotificationsService.notifyPrizeWon).toHaveBeenCalledWith(
+        'user-1',
+        50, // 5000 credits / 100 = $50
+        'Test Tournament',
+        1,
+        'test-tournament',
+      );
     });
 
     it('should return null for zero prize', async () => {
