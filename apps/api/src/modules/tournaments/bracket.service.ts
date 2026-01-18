@@ -199,6 +199,11 @@ export class BracketService {
 
     const position = match.bracketPosition as any;
 
+    // Determine the loser of this match
+    const loserId = match.participant1Id === winnerId
+      ? match.participant2Id
+      : match.participant1Id;
+
     if (!position.nextMatchNumber) {
       // This was the finals - tournament is complete
       await this.prisma.tournament.update({
@@ -206,7 +211,7 @@ export class BracketService {
         data: { status: 'COMPLETED' },
       });
 
-      // Update winner's participant record
+      // Update winner's participant record (1st place)
       await this.prisma.tournamentParticipant.updateMany({
         where: {
           tournamentId: match.tournamentId,
@@ -214,6 +219,17 @@ export class BracketService {
         },
         data: { status: 'WINNER', placement: 1 },
       });
+
+      // Update loser's participant record (2nd place)
+      if (loserId) {
+        await this.prisma.tournamentParticipant.updateMany({
+          where: {
+            tournamentId: match.tournamentId,
+            OR: [{ userId: loserId }, { teamId: loserId }],
+          },
+          data: { status: 'ELIMINATED', placement: 2 },
+        });
+      }
 
       // Auto-distribute prizes
       try {
@@ -237,6 +253,21 @@ export class BracketService {
 
     if (!nextMatch) {
       return;
+    }
+
+    // Check if this is a semi-final (next match is the finals)
+    const nextMatchPosition = nextMatch.bracketPosition as any;
+    const isSemiFinal = nextMatchPosition && !nextMatchPosition.nextMatchNumber;
+
+    // If semi-final, loser gets 3rd place
+    if (isSemiFinal && loserId) {
+      await this.prisma.tournamentParticipant.updateMany({
+        where: {
+          tournamentId: match.tournamentId,
+          OR: [{ userId: loserId }, { teamId: loserId }],
+        },
+        data: { status: 'ELIMINATED', placement: 3 },
+      });
     }
 
     // Update the next match with the winner
