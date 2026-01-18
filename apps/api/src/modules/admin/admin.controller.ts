@@ -85,4 +85,45 @@ export class AdminController {
     this.checkAdmin(req);
     return this.adminService.getGames({ page, pageSize });
   }
+
+  @Get('transactions/stats')
+  async getTransactionStats(@Request() req: any) {
+    this.checkAdmin(req);
+    return this.adminService.getTransactionStats();
+  }
+
+  @Get('transactions')
+  async getTransactions(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('userId') userId?: string,
+    @Query('tournamentId') tournamentId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    this.checkAdmin(req);
+    return this.adminService.getTransactions({
+      page,
+      pageSize,
+      type,
+      status,
+      userId,
+      tournamentId,
+      startDate,
+      endDate,
+    });
+  }
+
+  @Get('payments/report')
+  async getPaymentReport(
+    @Request() req: any,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    this.checkAdmin(req);
+    return this.adminService.getPaymentReport(startDate, endDate);
+  }
 }
