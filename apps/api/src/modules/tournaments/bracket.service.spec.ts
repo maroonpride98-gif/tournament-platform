@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BracketService } from './bracket.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PaymentsService } from '../payments/payments.service';
 
 describe('BracketService', () => {
   let service: BracketService;
@@ -20,11 +21,16 @@ describe('BracketService', () => {
     },
   };
 
+  const mockPaymentsService = {
+    distributePrizes: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BracketService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: PaymentsService, useValue: mockPaymentsService },
       ],
     }).compile();
 
@@ -136,11 +142,14 @@ describe('BracketService', () => {
         id: 'final-match',
         round: 3,
         tournamentId: '1',
+        participant1Id: 'winner-id',
+        participant2Id: 'loser-id',
         bracketPosition: {
           nextMatchNumber: null, // No next match = finals
         },
         tournament: { id: '1' },
       });
+      mockPaymentsService.distributePrizes.mockResolvedValue({ distributed: true });
 
       await service.advanceWinner('final-match', 'winner-id');
 
@@ -148,7 +157,24 @@ describe('BracketService', () => {
         where: { id: '1' },
         data: { status: 'COMPLETED' },
       });
-      expect(mockPrismaService.tournamentParticipant.updateMany).toHaveBeenCalled();
+      // Should update winner (1st place)
+      expect(mockPrismaService.tournamentParticipant.updateMany).toHaveBeenCalledWith({
+        where: {
+          tournamentId: '1',
+          OR: [{ userId: 'winner-id' }, { teamId: 'winner-id' }],
+        },
+        data: { status: 'WINNER', placement: 1 },
+      });
+      // Should update loser (2nd place)
+      expect(mockPrismaService.tournamentParticipant.updateMany).toHaveBeenCalledWith({
+        where: {
+          tournamentId: '1',
+          OR: [{ userId: 'loser-id' }, { teamId: 'loser-id' }],
+        },
+        data: { status: 'ELIMINATED', placement: 2 },
+      });
+      // Should distribute prizes
+      expect(mockPaymentsService.distributePrizes).toHaveBeenCalledWith('1');
     });
   });
 });
