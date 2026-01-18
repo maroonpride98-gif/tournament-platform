@@ -2,28 +2,26 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { StripeService } from './stripe.service';
+import { WalletService } from '../wallet/wallet.service';
 import { PLATFORM_FEES } from 'shared';
-import Stripe from 'stripe';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private prisma: PrismaService,
-    private stripeService: StripeService,
-    private configService: ConfigService,
+    private walletService: WalletService,
   ) {}
 
   /**
-   * Create checkout session for tournament entry fee
+   * Pay tournament entry fee using credits
    */
-  async createTournamentEntryCheckout(
+  async payEntryFee(
     tournamentId: string,
     userId: string,
-  ): Promise<{ checkoutUrl: string }> {
+  ): Promise<{ success: boolean; message: string }> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -43,10 +41,6 @@ export class PaymentsService {
       throw new BadRequestException('Tournament is full');
     }
 
-    if (tournament.entryFee <= 0) {
-      throw new BadRequestException('This tournament is free - no payment required');
-    }
-
     // Check if already registered
     const existingParticipant = await this.prisma.tournamentParticipant.findFirst({
       where: { tournamentId, userId },
@@ -56,79 +50,41 @@ export class PaymentsService {
       throw new BadRequestException('Already registered for this tournament');
     }
 
-    // Check for existing pending transaction
-    const pendingTransaction = await this.prisma.transaction.findFirst({
-      where: {
-        userId,
-        tournamentId,
-        type: 'ENTRY_FEE',
-        status: 'PENDING',
-      },
-    });
+    // Convert entry fee to credits (1 dollar = 100 credits)
+    const creditsRequired = Math.round(tournament.entryFee * 100);
 
-    if (pendingTransaction) {
-      throw new BadRequestException('You have a pending payment for this tournament');
+    // Check user balance
+    const balance = await this.walletService.getBalance(userId);
+    if (balance < creditsRequired) {
+      throw new BadRequestException(
+        `Insufficient credits. Required: ${creditsRequired}, Available: ${balance}`,
+      );
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    // Deduct credits and register in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Deduct credits
+      await tx.user.update({
+        where: { id: userId },
+        data: { credits: { decrement: creditsRequired } },
+      });
 
-    const session = await this.stripeService.createCheckoutSession({
-      tournamentId,
-      tournamentName: tournament.name,
-      userId,
-      amount: tournament.entryFee,
-      successUrl: `${frontendUrl}/tournaments/${tournament.slug}?payment=success`,
-      cancelUrl: `${frontendUrl}/tournaments/${tournament.slug}?payment=cancelled`,
-    });
+      // Create entry fee transaction
+      await tx.transaction.create({
+        data: {
+          userId,
+          tournamentId,
+          type: 'ENTRY_FEE',
+          amount: tournament.entryFee,
+          creditAmount: -creditsRequired,
+          platformFee: tournament.entryFee * PLATFORM_FEES.FREE_TIER,
+          status: 'COMPLETED',
+          description: `Entry fee for ${tournament.name}`,
+        },
+      });
 
-    // Create pending transaction
-    await this.prisma.transaction.create({
-      data: {
-        userId,
-        tournamentId,
-        type: 'ENTRY_FEE',
-        amount: tournament.entryFee,
-        platformFee: tournament.entryFee * PLATFORM_FEES.FREE_TIER,
-        status: 'PENDING',
-        stripePaymentId: session.id,
-        description: `Entry fee for ${tournament.name}`,
-      },
-    });
-
-    return { checkoutUrl: session.url! };
-  }
-
-  /**
-   * Handle successful payment webhook
-   */
-  async handlePaymentSuccess(session: Stripe.Checkout.Session): Promise<void> {
-    const { tournamentId, userId } = session.metadata || {};
-
-    if (!tournamentId || !userId) {
-      console.error('Missing metadata in checkout session:', session.id);
-      return;
-    }
-
-    // Update transaction status
-    await this.prisma.transaction.updateMany({
-      where: {
-        stripePaymentId: session.id,
-        status: 'PENDING',
-      },
-      data: {
-        status: 'COMPLETED',
-        stripePaymentId: (session.payment_intent as string) || session.id,
-      },
-    });
-
-    // Check if participant already exists (idempotency)
-    const existingParticipant = await this.prisma.tournamentParticipant.findFirst({
-      where: { tournamentId, userId },
-    });
-
-    if (!existingParticipant) {
-      // Register user for tournament
-      await this.prisma.tournamentParticipant.create({
+      // Register participant
+      await tx.tournamentParticipant.create({
         data: {
           tournamentId,
           userId,
@@ -136,42 +92,26 @@ export class PaymentsService {
         },
       });
 
-      // Update tournament prize pool
-      const tournament = await this.prisma.tournament.findUnique({
+      // Update prize pool
+      const netAmount = tournament.entryFee * (1 - PLATFORM_FEES.FREE_TIER);
+      await tx.tournament.update({
         where: { id: tournamentId },
+        data: {
+          prizePool: { increment: netAmount },
+        },
       });
-
-      if (tournament) {
-        const netAmount = tournament.entryFee * (1 - PLATFORM_FEES.FREE_TIER);
-        await this.prisma.tournament.update({
-          where: { id: tournamentId },
-          data: {
-            prizePool: { increment: netAmount },
-          },
-        });
-      }
-    }
-  }
-
-  /**
-   * Handle failed/expired payment
-   */
-  async handlePaymentFailed(session: Stripe.Checkout.Session): Promise<void> {
-    await this.prisma.transaction.updateMany({
-      where: {
-        stripePaymentId: session.id,
-        status: 'PENDING',
-      },
-      data: {
-        status: 'FAILED',
-      },
     });
+
+    return {
+      success: true,
+      message: `Successfully registered for ${tournament.name}`,
+    };
   }
 
   /**
    * Distribute prizes to tournament winners
    */
-  async distributePrizes(tournamentId: string): Promise<void> {
+  async distributePrizes(tournamentId: string): Promise<{ distributed: boolean; message: string }> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -194,8 +134,17 @@ export class PaymentsService {
       throw new BadRequestException('Tournament is not completed');
     }
 
+    if (tournament.prizeDistributed) {
+      return { distributed: false, message: 'Prizes already distributed' };
+    }
+
     if (tournament.prizePool <= 0) {
-      return; // No prizes to distribute
+      // Mark as distributed even with no prizes
+      await this.prisma.tournament.update({
+        where: { id: tournamentId },
+        data: { prizeDistributed: true },
+      });
+      return { distributed: true, message: 'No prizes to distribute (free tournament)' };
     }
 
     // Prize distribution: 1st: 60%, 2nd: 30%, 3rd: 10%
@@ -205,35 +154,64 @@ export class PaymentsService {
       3: 0.1,
     };
 
+    const winners: Array<{ placement: number; credits: number }> = [];
+
     for (const participant of tournament.participants) {
-      if (!participant.placement || !participant.user) continue;
+      if (!participant.placement || !participant.userId) continue;
 
       const percentage = prizeDistribution[participant.placement];
       if (!percentage) continue;
 
       const prizeAmount = tournament.prizePool * percentage;
+      const prizeCredits = Math.round(prizeAmount * 100);
 
-      // Create payout transaction record
-      await this.prisma.transaction.create({
-        data: {
-          userId: participant.userId!,
-          tournamentId,
-          type: 'PRIZE_PAYOUT',
-          amount: prizeAmount,
-          status: 'COMPLETED',
-          description: `${this.getPlacementString(participant.placement)} place prize for ${tournament.name}`,
-        },
-      });
+      // Award credits to winner
+      await this.walletService.awardPrize(
+        participant.userId,
+        prizeCredits,
+        tournamentId,
+        participant.placement,
+      );
 
-      // Update user stats
-      await this.prisma.userStats.update({
-        where: { userId: participant.userId! },
-        data: {
-          totalEarnings: { increment: prizeAmount },
-          tournamentsWon: participant.placement === 1 ? { increment: 1 } : undefined,
-        },
-      });
+      winners.push({ placement: participant.placement, credits: prizeCredits });
     }
+
+    // Mark tournament as prizes distributed
+    await this.prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { prizeDistributed: true },
+    });
+
+    return {
+      distributed: true,
+      message: `Prizes distributed to ${winners.length} winner(s)`,
+    };
+  }
+
+  /**
+   * Verify user can distribute prizes (organizer or admin)
+   */
+  async getTournamentForPrizeDistribution(tournamentId: string, userId: string) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Tournament not found');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const isAdmin = user?.role === 'ADMIN';
+    const isOrganizer = tournament.createdById === userId;
+
+    if (!isAdmin && !isOrganizer) {
+      throw new ForbiddenException('Only tournament organizer or admin can distribute prizes');
+    }
+
+    return tournament;
   }
 
   /**
@@ -243,31 +221,11 @@ export class PaymentsService {
     userId: string,
     options: { page?: number; pageSize?: number },
   ) {
-    const { page = 1, pageSize = 20 } = options;
-    const skip = (page - 1) * pageSize;
-
-    const [transactions, total] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: { userId },
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          tournament: {
-            select: { id: true, name: true, slug: true },
-          },
-        },
-      }),
-      this.prisma.transaction.count({ where: { userId } }),
-    ]);
-
-    return {
-      items: transactions,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    };
+    return this.walletService.getTransactions(
+      userId,
+      options.page,
+      options.pageSize,
+    );
   }
 
   /**
@@ -286,7 +244,7 @@ export class PaymentsService {
   }
 
   /**
-   * Process refund for a tournament entry
+   * Process refund for a tournament entry (credits returned)
    */
   async refundEntry(
     tournamentId: string,
@@ -325,57 +283,47 @@ export class PaymentsService {
       throw new NotFoundException('No completed payment found for this entry');
     }
 
-    // Process refund through Stripe
-    if (transaction.stripePaymentId) {
-      await this.stripeService.createRefund({
-        paymentIntentId: transaction.stripePaymentId,
-        reason: 'requested_by_customer',
+    const creditsToRefund = Math.round(transaction.amount * 100);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Refund credits to user
+      await tx.user.update({
+        where: { id: userId },
+        data: { credits: { increment: creditsToRefund } },
       });
-    }
 
-    // Update transaction
-    await this.prisma.transaction.update({
-      where: { id: transaction.id },
-      data: { status: 'REFUNDED' },
+      // Update original transaction
+      await tx.transaction.update({
+        where: { id: transaction.id },
+        data: { status: 'REFUNDED' },
+      });
+
+      // Create refund transaction record
+      await tx.transaction.create({
+        data: {
+          userId,
+          tournamentId,
+          type: 'REFUND',
+          amount: transaction.amount,
+          creditAmount: creditsToRefund,
+          status: 'COMPLETED',
+          description: `Refund for ${tournament.name} entry fee`,
+        },
+      });
+
+      // Remove participant
+      await tx.tournamentParticipant.deleteMany({
+        where: { tournamentId, userId },
+      });
+
+      // Update prize pool
+      const netAmount = transaction.amount * (1 - PLATFORM_FEES.FREE_TIER);
+      await tx.tournament.update({
+        where: { id: tournamentId },
+        data: {
+          prizePool: { decrement: netAmount },
+        },
+      });
     });
-
-    // Create refund transaction record
-    await this.prisma.transaction.create({
-      data: {
-        userId,
-        tournamentId,
-        type: 'REFUND',
-        amount: -transaction.amount,
-        status: 'COMPLETED',
-        description: `Refund for ${tournament.name} entry fee`,
-      },
-    });
-
-    // Remove participant
-    await this.prisma.tournamentParticipant.deleteMany({
-      where: { tournamentId, userId },
-    });
-
-    // Update prize pool
-    const netAmount = transaction.amount * (1 - PLATFORM_FEES.FREE_TIER);
-    await this.prisma.tournament.update({
-      where: { id: tournamentId },
-      data: {
-        prizePool: { decrement: netAmount },
-      },
-    });
-  }
-
-  private getPlacementString(placement: number): string {
-    switch (placement) {
-      case 1:
-        return '1st';
-      case 2:
-        return '2nd';
-      case 3:
-        return '3rd';
-      default:
-        return `${placement}th`;
-    }
   }
 }

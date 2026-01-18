@@ -1,12 +1,30 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import * as Sentry from '@sentry/node';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { SentryExceptionFilter } from './filters/sentry-exception.filter';
 
 async function bootstrap() {
+  // Initialize Sentry before app creation
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    });
+  }
+
   const app = await NestFactory.create(AppModule, {
-    // Enable raw body for Stripe webhooks
+    // Enable raw body for Square webhooks
     rawBody: true,
   });
+
+  // Global exception filter for Sentry
+  app.useGlobalFilters(new SentryExceptionFilter());
+
+  // Cookie parser for httpOnly cookies
+  app.use(cookieParser());
 
   // Enable CORS
   app.enableCors({

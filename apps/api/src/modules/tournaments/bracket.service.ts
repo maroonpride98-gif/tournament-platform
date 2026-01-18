@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ROUND_NAMES } from 'shared';
+import { PaymentsService } from '../payments/payments.service';
 
 interface Participant {
   id: string;
@@ -20,7 +21,11 @@ interface MatchData {
 
 @Injectable()
 export class BracketService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => PaymentsService))
+    private paymentsService: PaymentsService,
+  ) {}
 
   /**
    * Generate a single elimination bracket
@@ -209,6 +214,14 @@ export class BracketService {
         },
         data: { status: 'WINNER', placement: 1 },
       });
+
+      // Auto-distribute prizes
+      try {
+        await this.paymentsService.distributePrizes(match.tournamentId);
+      } catch (error) {
+        // Log error but don't fail the match completion
+        // Prizes can be distributed manually via endpoint
+      }
 
       return;
     }

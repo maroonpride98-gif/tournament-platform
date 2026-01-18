@@ -2,43 +2,29 @@ import {
   Controller,
   Post,
   Get,
-  Body,
   Param,
   Query,
-  Headers,
   UseGuards,
   Request,
-  RawBodyRequest,
-  Req,
-  BadRequestException,
+  Body,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PaymentsService } from './payments.service';
-import { StripeService } from './stripe.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import Stripe from 'stripe';
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(
-    private readonly paymentsService: PaymentsService,
-    private readonly stripeService: StripeService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly paymentsService: PaymentsService) {}
 
   /**
-   * Create checkout session for tournament entry
+   * Pay tournament entry fee with credits
    */
-  @Post('tournaments/:tournamentId/checkout')
+  @Post('tournaments/:tournamentId/pay')
   @UseGuards(JwtAuthGuard)
-  async createTournamentCheckout(
+  async payEntryFee(
     @Param('tournamentId') tournamentId: string,
     @Request() req: any,
   ) {
-    return this.paymentsService.createTournamentEntryCheckout(
-      tournamentId,
-      req.user.id,
-    );
+    return this.paymentsService.payEntryFee(tournamentId, req.user.id);
   }
 
   /**
@@ -48,12 +34,12 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async getUserTransactions(
     @Request() req: any,
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     return this.paymentsService.getUserTransactions(req.user.id, {
-      page,
-      pageSize,
+      page: page ? parseInt(page) : undefined,
+      pageSize: pageSize ? parseInt(pageSize) : undefined,
     });
   }
 
@@ -69,7 +55,7 @@ export class PaymentsController {
   }
 
   /**
-   * Request refund for tournament entry
+   * Request refund for tournament entry (credits returned)
    */
   @Post('tournaments/:tournamentId/refund')
   @UseGuards(JwtAuthGuard)
@@ -78,76 +64,31 @@ export class PaymentsController {
     @Body('userId') userId: string,
     @Request() req: any,
   ) {
-    // If no userId specified, refund the requester's entry
     const targetUserId = userId || req.user.id;
     await this.paymentsService.refundEntry(
       tournamentId,
       targetUserId,
       req.user.id,
     );
-    return { message: 'Refund processed successfully' };
+    return { message: 'Refund processed successfully. Credits returned to wallet.' };
   }
 
   /**
-   * Stripe webhook endpoint
+   * Distribute prizes for a completed tournament (organizer/admin only)
    */
-  @Post('webhook')
-  async handleWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers('stripe-signature') signature: string,
+  @Post('tournaments/:tournamentId/distribute-prizes')
+  @UseGuards(JwtAuthGuard)
+  async distributePrizes(
+    @Param('tournamentId') tournamentId: string,
+    @Request() req: any,
   ) {
-    const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+    // Verify user is organizer or admin
+    const tournament = await this.paymentsService.getTournamentForPrizeDistribution(
+      tournamentId,
+      req.user.id,
+    );
 
-    if (!webhookSecret) {
-      throw new BadRequestException('Webhook secret not configured');
-    }
-
-    if (!req.rawBody) {
-      throw new BadRequestException('No raw body available');
-    }
-
-    let event: Stripe.Event;
-
-    try {
-      event = this.stripeService.constructWebhookEvent(
-        req.rawBody,
-        signature,
-        webhookSecret,
-      );
-    } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
-      throw new BadRequestException(`Webhook Error: ${err.message}`);
-    }
-
-    // Handle the event
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
-        if (session.metadata?.type === 'tournament_entry') {
-          await this.paymentsService.handlePaymentSuccess(session);
-        }
-        break;
-      }
-
-      case 'checkout.session.expired':
-      case 'checkout.session.async_payment_failed': {
-        const session = event.data.object as Stripe.Checkout.Session;
-        if (session.metadata?.type === 'tournament_entry') {
-          await this.paymentsService.handlePaymentFailed(session);
-        }
-        break;
-      }
-
-      case 'payment_intent.payment_failed': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log('Payment failed:', paymentIntent.id);
-        break;
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
-    }
-
-    return { received: true };
+    const result = await this.paymentsService.distributePrizes(tournamentId);
+    return result;
   }
 }

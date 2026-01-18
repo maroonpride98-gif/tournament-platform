@@ -23,6 +23,7 @@ model User {
   discordId     String?
   role          UserRole  @default(USER)
   tier          UserTier  @default(FREE)
+  credits       Float     @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -141,6 +142,7 @@ model Tournament {
   checkInStart    DateTime?
   registrationEnd DateTime?
   status          TournamentStatus @default(DRAFT)
+  prizeDistributed Boolean         @default(false)
   createdById     String
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -408,10 +410,11 @@ model Transaction {
   tournamentId    String?
   type            TransactionType
   amount          Float
+  creditAmount    Float             @default(0)
   platformFee     Float             @default(0)
   status          TransactionStatus @default(PENDING)
-  stripePaymentId String?
-  stripePayoutId  String?
+  squarePaymentId String?
+  squareOrderId   String?
   description     String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -421,9 +424,9 @@ model Transaction {
 }
 
 enum TransactionType {
+  CREDIT_PURCHASE
   ENTRY_FEE
   PRIZE_PAYOUT
-  SUBSCRIPTION
   REFUND
 }
 
