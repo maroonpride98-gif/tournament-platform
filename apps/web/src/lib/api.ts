@@ -4,18 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
-});
-
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+  withCredentials: true, // Cookies sent automatically
 });
 
 // Tournaments API
@@ -47,8 +36,8 @@ export const tournamentsApi = {
 
 // Payments API
 export const paymentsApi = {
-  createCheckout: (tournamentId: string) =>
-    api.post(`/payments/tournaments/${tournamentId}/checkout`),
+  payEntryFee: (tournamentId: string) =>
+    api.post(`/payments/tournaments/${tournamentId}/pay`),
 
   getTransactions: (params?: { page?: number; pageSize?: number }) =>
     api.get('/payments/transactions', { params }),
@@ -58,6 +47,19 @@ export const paymentsApi = {
 
   refund: (tournamentId: string, userId?: string) =>
     api.post(`/payments/tournaments/${tournamentId}/refund`, { userId }),
+};
+
+// Wallet API
+export const walletApi = {
+  getBalance: () => api.get('/wallet/balance'),
+
+  getTransactions: (params?: { page?: number; pageSize?: number }) =>
+    api.get('/wallet/transactions', { params }),
+
+  getCreditPackages: () => api.get('/square/packages'),
+
+  createCheckout: (packageId: string) =>
+    api.post('/square/checkout', { packageId }),
 };
 
 // Games API

@@ -18,7 +18,7 @@ import {
   User,
   Shield,
 } from 'lucide-react';
-import { tournamentsApi, paymentsApi } from '@/lib/api';
+import { tournamentsApi, paymentsApi, walletApi } from '@/lib/api';
 import { TOURNAMENT_STATUS_LABELS, MATCH_STATUS_LABELS } from '@/lib/constants';
 import { BracketView } from '@/components/bracket/BracketView';
 import { useTournamentSocket } from '@/lib/socket';
@@ -144,9 +144,22 @@ export default function TournamentDetailPage() {
 
     try {
       if (tournament!.entryFee > 0) {
-        // Redirect to Stripe checkout
-        const response = await paymentsApi.createCheckout(tournament!.id);
-        window.location.href = response.data.checkoutUrl;
+        // Check user's credit balance first
+        const balanceResponse = await walletApi.getBalance();
+        const balance = balanceResponse.data.balance;
+        const creditsRequired = Math.round(tournament!.entryFee * 100);
+
+        if (balance < creditsRequired) {
+          // Not enough credits - redirect to wallet to buy more
+          const creditsNeeded = creditsRequired - balance;
+          window.location.href = `/wallet?needed=${creditsNeeded}&returnTo=${encodeURIComponent(`/tournaments/${tournament!.id}`)}`;
+          return;
+        }
+
+        // Pay with credits
+        await paymentsApi.payEntryFee(tournament!.id);
+        setPaymentStatus('success');
+        await loadTournament();
       } else {
         // Free tournament - register directly
         await tournamentsApi.register(tournament!.id);

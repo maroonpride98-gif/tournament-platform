@@ -5,6 +5,57 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AdminService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Process refunds for all paid participants in a tournament
+   */
+  private async processParticipantRefunds(tournamentId: string, tournamentName: string): Promise<number> {
+    // Find all entry fee transactions for this tournament
+    const entryFeeTransactions = await this.prisma.transaction.findMany({
+      where: {
+        tournamentId,
+        type: 'ENTRY_FEE',
+        status: 'COMPLETED',
+      },
+    });
+
+    let refundCount = 0;
+
+    for (const transaction of entryFeeTransactions) {
+      const creditsToRefund = Math.round(transaction.amount * 100);
+
+      await this.prisma.$transaction(async (tx) => {
+        // Refund credits to user
+        await tx.user.update({
+          where: { id: transaction.userId },
+          data: { credits: { increment: creditsToRefund } },
+        });
+
+        // Update original transaction status
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: { status: 'REFUNDED' },
+        });
+
+        // Create refund transaction record
+        await tx.transaction.create({
+          data: {
+            userId: transaction.userId,
+            tournamentId,
+            type: 'REFUND',
+            amount: transaction.amount,
+            creditAmount: creditsToRefund,
+            status: 'COMPLETED',
+            description: `Refund for cancelled tournament: ${tournamentName}`,
+          },
+        });
+      });
+
+      refundCount++;
+    }
+
+    return refundCount;
+  }
+
   async getStats() {
     const [
       totalUsers,
@@ -118,12 +169,22 @@ export class AdminService {
     // Cancel the tournament
     await this.prisma.tournament.update({
       where: { id: tournamentId },
-      data: { status: 'CANCELLED' },
+      data: {
+        status: 'CANCELLED',
+        prizePool: 0, // Reset prize pool since all entry fees are refunded
+      },
     });
 
-    // TODO: Process refunds for all participants if paid tournament
+    // Process refunds for all participants if paid tournament
+    let refundCount = 0;
+    if (tournament.entryFee > 0) {
+      refundCount = await this.processParticipantRefunds(tournamentId, tournament.name);
+    }
 
-    return { message: 'Tournament cancelled successfully' };
+    return {
+      message: 'Tournament cancelled successfully',
+      refundsProcessed: refundCount,
+    };
   }
 
   async getUsers(options: {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
-import { Menu, X, Trophy, Users, Gamepad2, User, LogOut, Plus, Shield } from 'lucide-react';
+import { Menu, X, Trophy, Users, Gamepad2, User, LogOut, Plus, Shield, Wallet } from 'lucide-react';
 import { NotificationDropdown } from '../notifications/NotificationDropdown';
 
 export function Navbar() {
@@ -69,6 +69,13 @@ export function Navbar() {
                       <User className="w-4 h-4" />
                       Profile
                     </Link>
+                    <Link
+                      href="/wallet"
+                      className="flex items-center gap-2 px-4 py-3 text-dark-300 hover:text-white hover:bg-dark-700 transition-colors"
+                    >
+                      <Wallet className="w-4 h-4" />
+                      Wallet
+                    </Link>
                     <button
                       onClick={() => signOut()}
                       className="flex items-center gap-2 px-4 py-3 text-dark-300 hover:text-white hover:bg-dark-700 transition-colors w-full rounded-b-lg"
@@ -132,6 +139,14 @@ export function Navbar() {
                   >
                     <User className="w-5 h-5" />
                     Profile
+                  </Link>
+                  <Link
+                    href="/wallet"
+                    className="flex items-center gap-2 px-4 py-3 text-dark-300 hover:text-white hover:bg-dark-800 rounded-lg"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Wallet className="w-5 h-5" />
+                    Wallet
                   </Link>
                   <button
                     onClick={() => signOut()}
